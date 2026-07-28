@@ -92,6 +92,11 @@ function firstLineOf(p) {
   return (p.lines[0] || '').replace(/\u3002$/, '') + '\u2026';
 }
 
+function displayNumberOf(poem) {
+  const index = POEMS.findIndex((item) => item.id === poem.id);
+  return String(index + 1).padStart(3, '0');
+}
+
 // Homepage: most recent N poems as staggered pop cards
 function renderRecentPoems(container, n) {
   if (!container || !POEMS.length) return;
