@@ -112,7 +112,7 @@ function workCardHTML(p, i) {
     return '<span class="work-card__verse">' + line + '</span>';
   }).join('');
   return '<a class="work-card work-card--' + tone + ' pop" href="poem.html?id=' + p.id + '" style="--i:' + i + '" data-offset="' + offset + '">' +
-    '<span class="work-card__num">' + p.id + '</span>' +
+    '<span class="work-card__num">' + displayNumberOf(p) + '</span>' +
     '<h3 class="work-card__title">' + p.title + '</h3>' +
     '<p class="work-card__body">' + body + '</p>' +
     '<div class="work-card__meta">' +
@@ -153,7 +153,7 @@ function renderArchive(container) {
 function poemRowHTML(p) {
   const month = (p.date || '').split('.')[1] || '';
   return '<a class="poem-row" href="poem.html?id=' + p.id + '" data-genre="' + p.genre + '" data-month="' + month + '">' +
-    '<span class="poem-row__num">' + p.id + '</span>' +
+    '<span class="poem-row__num">' + displayNumberOf(p) + '</span>' +
     '<div class="poem-row__body">' +
       '<h3 class="poem-row__title">' + p.title + '</h3>' +
       '<p class="poem-row__first">' + firstLineOf(p) + '</p>' +
