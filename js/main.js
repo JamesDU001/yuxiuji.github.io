@@ -85,16 +85,48 @@ if (window.matchMedia('(pointer: fine)').matches) {
 }
 
 // ============ Data rendering ============
-const POEMS = window.POEMS || [];
+// Normalize: sort by date descending (newest first), then auto-assign ids 001..NNN.
+// Maintenance only needs to drop entries anywhere in poems-data.js.
+const RAW_POEMS = window.POEMS || [];
+const POEMS = RAW_POEMS
+  .slice()
+  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  .map((p, i) => Object.assign({}, p, { id: String(i + 1).padStart(3, '0') }));
+
+// Permalink: prefer a stable `slug` (set per-poem in poems-data.js).
+// Validate uniqueness up front so duplicates are surfaced loudly.
+(function validateSlugs() {
+  const seen = {};
+  POEMS.forEach((p) => {
+    if (!p.slug) return;
+    if (seen[p.slug]) {
+      console.warn('[poems] 重複的 slug："' + p.slug + '"（出現在 ' + seen[p.slug] + ' 與 ' + p.title + '）');
+    } else {
+      seen[p.slug] = p.title;
+    }
+  });
+})();
+
+// Build the URL for a poem. Uses slug when available, falls back to id.
+function poemURL(p) {
+  const key = (p && p.slug) ? ('slug=' + encodeURIComponent(p.slug)) : ('id=' + p.id);
+  return 'poem.html?' + key;
+}
+
 const GENRE_ZH = { '\u4e03\u5f8b': '\u4e03\u8a00\u5f8b\u8a69', '\u4e03\u7d55': '\u4e03\u8a00\u7d55\u53e5', '\u4e94\u5f8b': '\u4e94\u8a00\u5f8b\u8a69' };
+
+// Full month-name map so new months auto-resolve in hints/buttons.
+const MONTH_NAMES = {
+  '01': '\u4e00\u6708', '02': '\u4e8c\u6708', '03': '\u4e09\u6708', '04': '\u56db\u6708',
+  '05': '\u4e94\u6708', '06': '\u516d\u6708', '07': '\u4e03\u6708', '08': '\u516b\u6708',
+  '09': '\u4e5d\u6708', '10': '\u5341\u6708', '11': '\u5341\u4e00\u6708', '12': '\u5341\u4e8c\u6708'
+};
+
+// Preferred display order for known genres; unknown ones follow by first appearance.
+const GENRE_ORDER = { '\u4e03\u5f8b': 1, '\u4e03\u7d55': 2, '\u4e94\u5f8b': 3, '\u4e94\u7d55': 4 };
 
 function firstLineOf(p) {
   return (p.lines[0] || '').replace(/\u3002$/, '') + '\u2026';
-}
-
-function displayNumberOf(poem) {
-  const index = POEMS.findIndex((item) => item.id === poem.id);
-  return String(index + 1).padStart(3, '0');
 }
 
 // Homepage: most recent N poems as staggered pop cards
@@ -111,8 +143,8 @@ function workCardHTML(p, i) {
   const body = (p.lines || []).map(function (line) {
     return '<span class="work-card__verse">' + line + '</span>';
   }).join('');
-  return '<a class="work-card work-card--' + tone + ' pop" href="poem.html?id=' + p.id + '" style="--i:' + i + '" data-offset="' + offset + '">' +
-    '<span class="work-card__num">' + displayNumberOf(p) + '</span>' +
+  return '<a class="work-card work-card--' + tone + ' pop" href="' + poemURL(p) + '" style="--i:' + i + '" data-offset="' + offset + '">' +
+    '<span class="work-card__num">' + p.id + '</span>' +
     '<h3 class="work-card__title">' + p.title + '</h3>' +
     '<p class="work-card__body">' + body + '</p>' +
     '<div class="work-card__meta">' +
@@ -123,37 +155,33 @@ function workCardHTML(p, i) {
     '</a>';
 }
 
-// Archive page: grouped by month
+// Archive page: grouped by month (newest first by key)
 function renderArchive(container) {
   if (!container || !POEMS.length) return;
   const groups = {};
   POEMS.forEach((p) => {
-    const [y, m] = p.date.split('.');
+    const [y, m] = (p.date || '').split('.');
     const key = y + '.' + m;
     (groups[key] = groups[key] || []).push(p);
   });
-  const monthName = {
-    '01': '\u4e00\u6708', '02': '\u4e8c\u6708', '03': '\u4e09\u6708', '04': '\u56db\u6708',
-    '05': '\u4e94\u6708', '06': '\u516d\u6708', '07': '\u4e03\u6708', '08': '\u516b\u6708',
-    '09': '\u4e5d\u6708', '10': '\u5341\u6708', '11': '\u5341\u4e00\u6708', '12': '\u5341\u4e8c\u6708'
-  };
-  container.innerHTML = Object.keys(groups).map((key) => {
-    const [y, m] = key.split('.');
-    const list = groups[key];
-    return '<div class="month-group reveal">' +
-      '<h2 class="month-group__label">' + y + ' \u00b7 ' + (monthName[m] || (m + '\u6708')) +
-      ' <i>' + String(list.length).padStart(2, '0') + ' \u9996</i></h2>' +
-      '<div class="poems">' + list.map((p) => poemRowHTML(p)).join('') + '</div>' +
-      '</div>';
-  }).join('');
+  container.innerHTML = Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => {
+      const [y, m] = key.split('.');
+      const list = groups[key];
+      return '<div class="month-group reveal">' +
+        '<h2 class="month-group__label">' + y + ' \u00b7 ' + (MONTH_NAMES[m] || (m + '\u6708')) +
+        ' <i>' + String(list.length).padStart(2, '0') + ' \u9996</i></h2>' +
+        '<div class="poems">' + list.map((p) => poemRowHTML(p)).join('') + '</div>' +
+        '</div>';
+    }).join('');
   container.querySelectorAll('.reveal').forEach((el) => io.observe(el));
-  bindFilter();
 }
 
 function poemRowHTML(p) {
   const month = (p.date || '').split('.')[1] || '';
-  return '<a class="poem-row" href="poem.html?id=' + p.id + '" data-genre="' + p.genre + '" data-month="' + month + '">' +
-    '<span class="poem-row__num">' + displayNumberOf(p) + '</span>' +
+  return '<a class="poem-row" href="' + poemURL(p) + '" data-genre="' + p.genre + '" data-month="' + month + '">' +
+    '<span class="poem-row__num">' + p.id + '</span>' +
     '<div class="poem-row__body">' +
       '<h3 class="poem-row__title">' + p.title + '</h3>' +
       '<p class="poem-row__first">' + firstLineOf(p) + '</p>' +
@@ -166,20 +194,44 @@ function poemRowHTML(p) {
     '</a>';
 }
 
-// Combined month + genre filter
+// Combined month + genre filter.
+// Buttons in the HTML are treated as fallback/seed: we rebuild them from the
+// actual poem data so adding new months/genres (or new genre types) just works.
 let _filterBound = false;
 function bindFilter() {
   const panel = document.querySelector('.filter-panel');
   if (!panel || _filterBound) return;
   _filterBound = true;
 
+  const monthBar = panel.querySelector('[data-filter-group="month"]');
+  const genreBar = panel.querySelector('[data-filter-group="genre"]');
+  if (!monthBar || !genreBar) return;
+
+  // Collect distinct months/genres present in the data, in display order.
+  const months = Array.from(new Set(
+    POEMS.map((p) => (p.date || '').split('.')[1]).filter(Boolean)
+  )).sort((a, b) => b.localeCompare(a)); // newest first
+
+  const genres = Array.from(new Set(
+    POEMS.map((p) => p.genre).filter(Boolean)
+  )).sort((a, b) => {
+    const da = GENRE_ORDER[a] || 99;
+    const db = GENRE_ORDER[b] || 99;
+    return da - db;
+  });
+
+  function buildBar(bar, values, formatLabel, dataAttr) {
+    bar.innerHTML = '<button class="is-active" data-' + dataAttr + '="all">\u5168\u90e8</button>' +
+      values.map((v) => '<button data-' + dataAttr + '="' + v + '">' + formatLabel(v) + '</button>').join('');
+  }
+
+  buildBar(monthBar, months, (m) => MONTH_NAMES[m] || (m + '\u6708'), 'month');
+  buildBar(genreBar, genres, (g) => g, 'genre');
+
   let month = 'all';
   let genre = 'all';
 
   const hint = document.getElementById('filter-hint');
-  const monthName = {
-    '03': '\u4e09\u6708', '04': '\u56db\u6708', '05': '\u4e94\u6708', '07': '\u4e03\u6708'
-  };
 
   function apply() {
     let visible = 0;
@@ -196,7 +248,7 @@ function bindFilter() {
     });
     if (hint) {
       const parts = [];
-      if (month !== 'all') parts.push(monthName[month] || month);
+      if (month !== 'all') parts.push(MONTH_NAMES[month] || month);
       if (genre !== 'all') parts.push(genre);
       hint.textContent = parts.length
         ? '\u7576\u524d\uff1a' + parts.join(' \u00b7 ') + ' \u2014 ' + visible + ' \u9996'
@@ -204,16 +256,16 @@ function bindFilter() {
     }
   }
 
-  panel.querySelectorAll('[data-filter-group="month"] button').forEach((btn) => {
+  monthBar.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      panel.querySelectorAll('[data-filter-group="month"] button').forEach((b) => b.classList.toggle('is-active', b === btn));
+      monthBar.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b === btn));
       month = btn.dataset.month || 'all';
       apply();
     });
   });
-  panel.querySelectorAll('[data-filter-group="genre"] button').forEach((btn) => {
+  genreBar.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      panel.querySelectorAll('[data-filter-group="genre"] button').forEach((b) => b.classList.toggle('is-active', b === btn));
+      genreBar.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b === btn));
       genre = btn.dataset.genre || 'all';
       apply();
     });
@@ -224,8 +276,13 @@ function bindFilter() {
 // Single poem page: render one poem (vertical scroll)
 function renderPoemPage() {
   const params = new URLSearchParams(location.search);
-  const id = params.get('id') || '001';
-  const poem = POEMS.find((p) => p.id === id) || POEMS[0];
+  const slug = params.get('slug');
+  const id = params.get('id');
+  // Prefer slug; fall back to id (legacy links) for back-compat.
+  let poem = null;
+  if (slug) poem = POEMS.find((p) => p.slug === slug);
+  if (!poem && id) poem = POEMS.find((p) => p.id === id);
+  if (!poem) poem = POEMS[0];
   if (!poem) return;
 
   const idx = POEMS.indexOf(poem);
@@ -257,8 +314,8 @@ function renderPoemPage() {
   const footEl = document.querySelector('.poem-foot');
   if (footEl) {
     footEl.innerHTML =
-      (next ? '<a class="prev" href="poem.html?id=' + next.id + '"><small>\u2190 \u8f03\u65b0</small>' + next.title + '</a>' : '<span></span>') +
-      (prev ? '<a class="next" href="poem.html?id=' + prev.id + '"><small>\u8f03\u820a \u2192</small>' + prev.title + '</a>' : '<span></span>');
+      (next ? '<a class="prev" href="' + poemURL(next) + '"><small>\u2190 \u8f03\u65b0</small>' + next.title + '</a>' : '<span></span>') +
+      (prev ? '<a class="next" href="' + poemURL(prev) + '"><small>\u8f03\u820a \u2192</small>' + prev.title + '</a>' : '<span></span>');
   }
 }
 
@@ -269,6 +326,16 @@ function boot() {
   renderArchive(document.getElementById('archive-list'));
   if (document.querySelector('[data-page="poem"]')) renderPoemPage();
   bindFilter();
+  fillCounts();
+}
+
+// Auto-fill any [data-count] element with the current total, so HTML never
+// needs to be touched when poems are added/removed.
+function fillCounts() {
+  const n = POEMS.length;
+  document.querySelectorAll('[data-count]').forEach((el) => {
+    el.textContent = String(n);
+  });
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', boot);
