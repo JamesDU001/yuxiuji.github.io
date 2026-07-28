@@ -59,18 +59,7 @@
 
 window.POEMS = [
   // ===== 八月 2026 （首） =====
-  {
-    title: "xxxx",
-    genre: "乐府",
-    date: "2026.08.01",
-    slug: "2026-08-01-1",
-    lines: [
-      "xxxxxxx，xxxxxxx。",
-      "xxxxxxx，xxxxxxx。",
-      "xxxxxxx，xxxxxxx。",
-      "xxxxxxx，xxxxxxx。"
-    ]
-  },
+  
 
   // ===== 七月 2026 (3首) =====
   {
